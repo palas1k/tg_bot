@@ -28,16 +28,16 @@ headers = {
     }
 
 
-async def mail_send(email_address):
+async def mail_send(email_address, url):
     to_address = email_address
-    subject = "Find "
-    body = "Текст письма"
+    subject = "Report"
+    body = f"Найдено нарушение на сайте: {url}"
     message = MIMEMultipart()
     message["From"] = email_address
     message["To"] = to_address
     message["Subject"] = subject
     message.attach(MIMEText(body, "plain"))
-    with smtplib.SMTP("smtp.yandex.com", 587) as server:
+    with smtplib.SMTP(config.host, 587) as server:
         server.starttls()
         server.login(config.email_address, config.email_password)
         server.send_message(message)
@@ -50,7 +50,7 @@ async def fetch(url, session, json):
         return await response.json()
 
 
-async def whoise_get(domen):
+async def whoise_get(domen) -> None | str:
     json_data = {
         'searchWord': domen,
         'lang': 'ru',
@@ -58,18 +58,27 @@ async def whoise_get(domen):
     url = "https://www.nic.ru/app/v1/get/whois"
     async with aiohttp.ClientSession(headers=headers) as session:
         result = await fetch(url, session, json_data)
-    
     if result.get("status") == "success":
-        text = result["body"]["list"][0]["html"]
+        try:
+            text = result["body"]["list"][0]["html"]
+        except KeyError:
+            domains: list[dict] = result["body"]["list"][0]["formatted"]
+            for i in domains:
+                if i.get("name") == "domain":
+                    domain = i.get("value")
+                    print(domain)
+                    return domain
+            return None
         pattern = r"Domain Name:\s+([\w.-]+)"
 
         match = re.search(pattern, text)
 
         if match:
             domain_name = match.group(1)
-            print("Domain Name:", domain_name)
+            print(domain_name)
+            return domain_name
         else:
-            print("No domain name found in the text.")
+            return
 
 
-asyncio.run(whoise_get("vk.com"))
+asyncio.run(whoise_get("jut.su"))
